@@ -795,7 +795,7 @@ check_ip_support() {
   local version="$1"
   log "$LOG_INFO" "Checking for IPv${version} support"
 
-  if ip -${version} addr show scope global 2>/dev/null | grep -q "inet${version}"; then
+  if ip -${version} addr show scope global 2>/dev/null | grep -q "inet${version//4/ }"; then
     log "$LOG_INFO" "IPv${version} is supported"
     return 0
   fi
@@ -1568,6 +1568,7 @@ print_legend() {
     echo "$header"
 
     while read -r code; do
+      [[ -z "$code" ]] && continue
       local country ipv4_num ipv6_num ipv4_str ipv6_str
       country="${COUNTRY_NAMES[$code]:-Unknown}"
 
@@ -2182,28 +2183,16 @@ check_doh() {
         "AdGuard|https://94.140.14.140/dns-query|https://94.140.14.140/dns-query"
     )
 
-    local curl_opts=(-sS --max-time 5 --connect-timeout 2 --retry 1 --retry-connrefused \
-                     -H "accept: application/dns-json")
+    local curl_opts=(-s --max-time 5 --connect-timeout 2 -o /dev/null)
 
-    local entry name doh_url test_url url response
+    local entry name doh_url test_url
 
     for entry in "${resolvers[@]}"; do
         IFS="|" read -r name doh_url test_url <<<"$entry"
-        url="${test_url}?name=${test_domain}&type=A"
 
-        response="$(curl "${curl_opts[@]}" "$url" 2>/dev/null)"
-
-        if command -v jq >/dev/null 2>&1; then
-            if printf '%s' "$response" | jq -e '.Status == 0 and (.Answer | length > 0)' >/dev/null 2>&1; then
-                SELECTED_DOH_URL="--doh-url ${doh_url}"
-                return 0
-            fi
-        else
-            if echo "$response" | grep -q '"Status"[[:space:]]*:[[:space:]]*0' && \
-               echo "$response" | grep -q '"Answer"'; then
-                SELECTED_DOH_URL="--doh-url ${doh_url}"
-                return 0
-            fi
+        if curl "${curl_opts[@]}" --doh-url "$doh_url" "https://$test_domain/" 2>/dev/null; then
+            SELECTED_DOH_URL="--doh-url ${doh_url}"
+            return 0
         fi
     done
 
