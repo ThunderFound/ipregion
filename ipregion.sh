@@ -1303,6 +1303,11 @@ run_service_group() {
 
   log "$LOG_INFO" "Running $group group services"
 
+  local TMP_RESULTS_DIR
+  TMP_RESULTS_DIR=$(mktemp -d "$(get_tmpdir)/ipregion_XXXXXX")
+
+  local pids=()
+
   for service_name in "${services_array[@]}"; do
     if printf "%s\n" "${EXCLUDED_SERVICES[@]}" | grep -Fxq "$service_name"; then
       log "$LOG_INFO" "Skipping service: $service_name"
@@ -1321,33 +1326,68 @@ run_service_group() {
       is_cdn=false
     fi
 
-    if [[ "$is_custom" == true ]]; then
-      process_service "$service_name" true
-    elif [[ "$is_cdn" == true ]]; then
-      handler_func="${CUSTOM_SERVICES_HANDLERS[$service_name]}"
+    (
+      if [[ "$is_custom" == true ]]; then
+        process_service "$service_name" true
+      elif [[ "$is_cdn" == true ]]; then
+        handler_func="${CUSTOM_SERVICES_HANDLERS[$service_name]}"
+        display_name="${CDN_SERVICES[$service_name]}"
+        if [[ -n "$handler_func" ]]; then
+          if [[ -n "$SPINNER_SERVICE_FILE" ]]; then
+            echo "$display_name" >"$SPINNER_SERVICE_FILE"
+          fi
+          ipv4_result=""
+          ipv6_result=""
+          if [[ "$IPV6_ONLY" != true ]]; then
+            ipv4_result=$("$handler_func" 4)
+          fi
+          if [[ "$IPV4_ONLY" != true ]] && [[ "$IPV6_SUPPORTED" -eq 0 && -n "$EXTERNAL_IPV6" ]]; then
+            ipv6_result=$("$handler_func" 6)
+          fi
+          add_result "cdn" "$display_name" "$ipv4_result" "$ipv6_result"
+        fi
+      else
+        process_service "$service_name"
+      fi
+    ) &
+    pids+=($!)
+  done
+
+  if ((${#pids[@]} > 0)); then
+    wait "${pids[@]}"
+  fi
+
+  for service_name in "${services_array[@]}"; do
+    if printf "%s\n" "${EXCLUDED_SERVICES[@]}" | grep -Fxq "$service_name"; then
+      continue
+    fi
+
+    local file_name=""
+    if [[ "$group" == "cdn" ]]; then
       display_name="${CDN_SERVICES[$service_name]}"
-
-      if [[ -n "$handler_func" ]]; then
-		  echo "$display_name" >"$SPINNER_SERVICE_FILE"
-
-		  ipv4_result=""
-		  ipv6_result=""
-
-		  if [[ "$IPV6_ONLY" != true ]]; then
-			ipv4_result=$("$handler_func" 4)
-		  fi
-
-		  if [[ "$IPV4_ONLY" != true ]] && [[ "$IPV6_SUPPORTED" -eq 0 && -n "$EXTERNAL_IPV6" ]]; then
-			ipv6_result=$("$handler_func" 6)
-		  fi
-
-		  add_result "cdn" "$display_name" "$ipv4_result" "$ipv6_result"
-		fi
-
+      file_name="$TMP_RESULTS_DIR/${group}_${display_name}"
+    elif [[ "$group" == "custom" ]]; then
+      display_name="${CUSTOM_SERVICES[$service_name]:-$service_name}"
+      file_name="$TMP_RESULTS_DIR/${group}_${display_name}"
     else
-      process_service "$service_name"
+      local service_config="${PRIMARY_SERVICES[$service_name]}"
+      IFS='|' read -r display_name domain url_template response_format <<<"$service_config"
+      [[ -z "$display_name" ]] && display_name="$service_name"
+      file_name="$TMP_RESULTS_DIR/${group}_${display_name}"
+    fi
+
+    if [[ -f "$file_name" ]]; then
+      local line
+      line=$(cat "$file_name")
+      case "$group" in
+        primary) ARR_PRIMARY+=("$line") ;;
+        custom) ARR_CUSTOM+=("$line") ;;
+        cdn) ARR_CDN+=("$line") ;;
+      esac
     fi
   done
+
+  rm -rf "$TMP_RESULTS_DIR"
 }
 
 run_all_services() {
@@ -1433,6 +1473,11 @@ add_result() {
   ipv4=${ipv4//$'\t'/ }
   ipv6=${ipv6//$'\n'/}
   ipv6=${ipv6//$'\t'/ }
+
+  if [[ -n "$TMP_RESULTS_DIR" ]]; then
+    echo "$service|||$ipv4|||$ipv6" > "$TMP_RESULTS_DIR/${group}_${service}"
+    return
+  fi
 
   case "$group" in
     primary) ARR_PRIMARY+=("$service|||$ipv4|||$ipv6") ;;
