@@ -2284,7 +2284,7 @@ ping_single_server() {
     --connect-timeout "$CURL_TIMEOUT"
     --max-time "$CURL_TIMEOUT"
     -o /dev/null
-    -w '%{time_total} %{http_code}'
+    -w '%{time_connect} %{http_code}'
   )
 
   if [[ "$ip_version" == "4" ]]; then
