@@ -376,6 +376,7 @@ declare -A CUSTOM_SERVICES=(
   [OOKLA_SPEEDTEST]="Ookla Speedtest"
   [JETBRAINS]="JetBrains"
   [BING]="Microsoft (Bing)"
+  [PATREON]="Patreon"
 )
 
 CUSTOM_SERVICES_ORDER=(
@@ -400,6 +401,7 @@ CUSTOM_SERVICES_ORDER=(
   "OOKLA_SPEEDTEST"
   "JETBRAINS"
   "BING"
+  "PATREON"
 )
 
 declare -A CUSTOM_SERVICES_HANDLERS=(
@@ -427,6 +429,7 @@ declare -A CUSTOM_SERVICES_HANDLERS=(
   [OOKLA_SPEEDTEST]="lookup_ookla_speedtest"
   [JETBRAINS]="lookup_jetbrains"
   [BING]="lookup_bing"
+  [PATREON]="lookup_patreon"
 )
 
 declare -A CDN_SERVICES=(
@@ -2011,6 +2014,19 @@ lookup_bing() {
   fi
 
   echo "$region"
+}
+
+lookup_patreon() {
+  local ip_version="$1"
+  local response country
+
+  response=$(make_request GET "https://transcend-cdn.com/cm/8dec6ba2-a601-4c04-a3ba-e4d5b45000f4/airgap.js" \
+    --ip-version "$ip_version" \
+    --user-agent "$USER_AGENT")
+
+  country=$(echo "$response" | grep -oP '"country":"\K[A-Z]{2}(?=")' | head -n1)
+
+  echo "$country"
 }
 
 lookup_spotify_signup() {
