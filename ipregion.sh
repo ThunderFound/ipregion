@@ -2274,36 +2274,42 @@ ping_single_server() {
 
   IFS='|' read -r location hostname <<<"$server_config"
 
-  timestamp=$(date +%s%3N)
-  url="https://$hostname/?t=$timestamp"
+  local os
+  os=$(uname -s)
+  
+  local ping_cmd="ping"
+  local timeout_flag=""
+  local interface_flag=""
 
-  local curl_args=(
-    --silent --compressed
-    --head
-    --retry 0
-    --connect-timeout "$CURL_TIMEOUT"
-    --max-time "$CURL_TIMEOUT"
-    -o /dev/null
-    -w '%{time_connect} %{http_code}'
-  )
-
-  if [[ "$ip_version" == "4" ]]; then
-    curl_args+=(-4)
-  else
-    curl_args+=(-6)
+  if [[ "$ip_version" == "6" ]]; then
+    if [[ "$os" == "Darwin" ]]; then
+      ping_cmd="ping6"
+    else
+      if ping -6 -c 1 localhost >/dev/null 2>&1; then
+        ping_cmd="ping -6"
+      elif command -v ping6 >/dev/null 2>&1; then
+        ping_cmd="ping6"
+      fi
+    fi
   fi
 
-  if [[ -n "$PROXY_ADDR" ]]; then
-    curl_args+=(--proxy "socks5://$PROXY_ADDR")
+  if [[ "$os" == "Linux" ]]; then
+    timeout_flag="-W $CURL_TIMEOUT"
+  elif [[ "$os" == "Darwin" ]]; then
+    timeout_flag="-t $CURL_TIMEOUT"
+  else
+    timeout_flag="-W $CURL_TIMEOUT"
   fi
 
   if [[ -n "$INTERFACE_NAME" ]]; then
-    curl_args+=(--interface "$INTERFACE_NAME")
+    if [[ "$os" == "Darwin" && "$ip_version" == "4" ]]; then
+      interface_flag="-b $INTERFACE_NAME"
+    else
+      interface_flag="-I $INTERFACE_NAME"
+    fi
   fi
 
-  curl_args+=("$url")
-
-  result=$(timeout "$((CURL_TIMEOUT + 1))"s curl "${curl_args[@]}" $SELECTED_DOH_URL 2>/dev/null)
+  result=$(LC_ALL=C timeout "$((CURL_TIMEOUT + 1))"s $ping_cmd -c 1 $timeout_flag $interface_flag "$hostname" 2>/dev/null)
   local exit_status=$?
 
   if [[ $exit_status -ne 0 ]] || [[ -z "$result" ]]; then
@@ -2311,13 +2317,16 @@ ping_single_server() {
     return
   fi
 
-  time_ms=$(echo "$result" | awk '{printf "%.1f", $1 * 1000}')
-  http_code=$(echo "$result" | awk '{print $2}')
+  time_ms=$(echo "$result" | LC_ALL=C awk -F'time=' '/time=/ {split($2, a, " "); printf "%.1f", a[1]}')
 
-  if [[ "$http_code" == "000" || -z "$http_code" ]]; then
-    echo ""
-  else
+  if [[ -z "$time_ms" ]]; then
+    time_ms=$(echo "$result" | LC_ALL=C awk -F'/' '/rtt|round-trip/ {printf "%.1f", $5}')
+  fi
+
+  if [[ -n "$time_ms" ]]; then
     echo "${time_ms}ms"
+  else
+    echo ""
   fi
 }
 
