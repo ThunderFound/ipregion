@@ -11,12 +11,16 @@ bash <(wget -qO- https://raw.githubusercontent.com/ThunderFound/ipregion/refs/he
 
 Output example:
 
-![image](images/preview.png)
+<p>
+  <img src="images/preview.png" width="45%" align="top" />
+  <img src="images/ping.png" width="45%" align="top" />
+</p>
 
 ## What's New in This Fork
 
 This fork of the fork has a few features added:
 - Parallelization: it takes a lot less time
+- Ping test
 - New services (only 1 currently): Patreon
 
 ## Main features
@@ -50,6 +54,9 @@ For manual lookup of codes, you can use the official ISO website: [https://www.i
 
 # Check all services with default settings
 ./ipregion.sh
+
+# Run a ping test
+./ipregion.sh --ping
 
 # Check only GeoIP services
 ./ipregion.sh --group primary
@@ -93,6 +100,7 @@ IPRegion — determines your IP geolocation using various GeoIP services and pop
 
 Options:
   -h, --help           Show this help message and exit
+  -ping, --ping        Run a ping test
   -v, --verbose        Enable verbose logging
   -j, --json           Output results in JSON format
   -g, --group GROUP    Run only one group: 'primary', 'custom', 'cdn' or 'all' (default: all)
@@ -104,6 +112,7 @@ Options:
 
 Examples:
   ipregion.sh                       # Check all services with default settings
+  ipregion.sh --ping                # Run a ping test
   ipregion.sh -g primary            # Check only GeoIP services
   ipregion.sh -g custom             # Check only popular websites
   ipregion.sh -g cdn                # Check only CDN

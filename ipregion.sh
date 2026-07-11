@@ -575,6 +575,7 @@ IPRegion — determines your IP geolocation using various GeoIP services and pop
 
 Options:
   -h, --help           Show this help message and exit
+  -ping, --ping        Run a ping test
   -v, --verbose        Enable verbose logging
   -j, --json           Output results in JSON format
   -g, --group GROUP    Run only one group: 'primary', 'custom', 'cdn', or 'all' (default: all)
@@ -586,6 +587,7 @@ Options:
 
 Examples:
   $0                       # Check all services with default settings
+  $0 --ping                # Run a ping test
   $0 -g primary            # Check only GeoIP services
   $0 -g custom             # Check only popular websites
   $0 -g cdn                # Check only CDN endpoints
